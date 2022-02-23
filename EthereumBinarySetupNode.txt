@@ -1,0 +1,309 @@
+This guide explains how to setup Binary Ethereum Mainnet Node using geth 1.10.15
+(as of Feb 22/22 - the latest version)
+
+Its very rough but it works for me.   Will improve it as time goes on.
+
+The basis is taken from this Video and blog
+
+https://www.youtube.com/watch?v=ftS-SlzCCn4 
+
+https://sideofburritos.com/blog/how-to-securely-setup-an-ethereum-node/
+
+I'm doing this on a VPS with a mounted Disk.  I tried it on both Hetzner and DO.
+
+For security of a VPS - see my document on PocketNodeSetup-BasedOnBenVansSetup.txt wrt
+sshd_config (kind of important)
+
+One more think - do regular backups and updates - I haven't yet seen it effect the node.
+
+Here is my standard DISCLAIMER
+
+DISCLAIMER
+----------
+YOU UNDERSTAND AND EXPRESSLY AGREE THAT THE USE OF THIS MATERIAL IS AT YOUR SOLE RISK.  
+If there are any mistakes in our material outlined here then we do not take any responsiblity 
+of things that go or could go wrong in your setup.
+If you make mistakes from the material here we do not take any responsiblity of things that go 
+or could go wrong in your setup.
+
+!. useradd --no-create-home --shell /bin/false <user>
+
+Create with no home directory.  Will assign data directory when we call geth
+
+useradd --no-create-home --shell /bin/false <user>
+
+ - no home directory and not shell assess reduces attack surface
+
+ 
+2. Install the latest version of geth
+
+sudo add-apt-repository -y ppa:ethereum/ethereum
+sudo apt-get update
+sudo apt-get install geth
+
+3. Mount the Volume at least 600 GIG
+
+4. mkdir -p /yourpath/eth/chain/data
+
+5. Set permissions
+
+   sudo chown -R <user>:<user> /yourpath/eth/chain/data
+
+6. Setup as a service 
+   This is done if the server needs to be rebooted which it often needs to and also it has no home directory
+   which means you can't use TMUX or screen.
+
+   Sync Mode 
+   ---------
+   You have a choice of snap, full or light.
+
+   You can use snap or full.  Full takes a long time to sync while snap is very quick
+   For pocket snap is good enough (formetly called fast).
+
+   This is the geth command with intial paramters to sync eth node. Once its done we will update for RPC requests restricted
+   to the domains accessing it (more later ...) .
+
+
+   geth --datadir /yourpath/chain/data/ --port 30303 --syncmode "snap" --cache=8192 --http --metrics --maxpeers 30 
+
+
+[Unit]
+Description=Go Ethereum Client
+After=network.target
+Wants=network.target
+[Service]
+User=<user>
+Group=<user>
+Type=simple
+Restart=always
+RestartSec=5
+ExecStart=geth --datadir /yourpath/eth/chain/data --port 30303 --syncmode "snap" --cache=8192 --http --metrics --maxpeers 30
+[Install]
+WantedBy=default.target
+
+
+# run these commands to get the service working
+
+systemctl daemon-reload
+systemctl enable geth.service
+# when you are ready
+systemctl start geth.service
+
+# check teh status
+systemctl status geth.service
+
+
+
+7. firewall
+sudo apt-get install ufw  
+sudo ufw default deny incoming  
+sudo ufw default allow outgoing  
+sudo ufw allow 443  
+sudo ufw allow 30303
+
+# enable if not yet enabled
+sudo ufw enable  
+sudo ufw status verbose  
+
+# Restrict by IP Address of the Pocket node
+ufw allow from <IP> to any port 443
+
+# Delete Rules - if you need
+# by rule
+ufw delete allow from <IP> to any port 443
+
+# by number
+ufw status numbered
+ufw delete 2
+
+
+# Note you can also use an external hardware or software firewall which is acutally better since it keeps
+# uncessary access to the server.  It can be used in conjunction with ufw
+# DO or Hetzner all have software firewalls
+# Note I haven't gotten this to work so thats why I'm using only ufw for now.
+
+
+8. Setting up outside access.  There are 3 main steps
+8a. Create a domain name for subdomain of a domain "mydomain dot whatever"
+    by creating an A Record on the platform hosting your DNS for the domain.
+
+    You need a subdomain name and the IP address of teh server hosting the geth node
+
+   Example 
+
+   A  eth-main.mydomain.com   <IP address>
+
+8b. On the server create an  SSL certificate using the certbot
+    of Lets Encrypt which will work in our case the web server 
+    software nginx
+
+# steps to install SSL certificate
+apt install nginx
+apt install certbot python3-certbot-nginx
+
+certbot certonly -d YourDomainName --preferred-challenges http
+
+certbot asks the standard questions but for verification 
+select webroot then enter /var/www/html 
+
+# check to see the certbot renewal crontab is working
+sudo systemctl status certbot.timer
+
+# check to see if it will renew the domain SSL as a Dry Run
+sudo sudo certbot certonly --dry-run -d <yourdomain.com>
+
+8c. Setting up a Reverse Proxy for the domain created in Step 8a. and 8b.
+
+8c.1 - Add teh following log format to nginx.conf in /etc/nginx in case for better debugging
+
+log_format main '$http_x_forwarded_for - $remote_user [$time_local] '
+'"$request_method $scheme://$host$request_uri $server_protocol" '
+'$status $body_bytes_sent "$http_referer" '
+'"$http_user_agent" $request_time';
+
+
+8c.2. Create virtual host in /etc/nginx/sites-available  Reverse Proxy 
+      Call it eth-main.mydomain.whatever.conf
+
+With you favorited editor (mine is vi)      
+
+vi eth-main.mydomain.dev.conf
+
+
+server {
+
+   server_name eth-main.mydomain.dev;
+   access_log /var/log/nginx/reverse-access.log main;
+   error_log /var/log/nginx/reverse-error.log;
+
+   location / {
+      proxy_pass http://127.0.0.1:8545;
+   }
+
+   listen [::]:443 ssl ipv6only=on; # managed by Certbot
+
+   listen 443 ssl; # managed by Certbot
+   ssl_certificate /etc/letsencrypt/live/eth-main.mydomain.dev/fullchain.pem;
+   ssl_certificate_key /etc/letsencrypt/live/eth-main.mydomain.dev/privkey.pem;
+   include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+   ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}
+
+server {
+
+   if ($host = eth-main.mydomain.dev) {
+
+      return 301 https://$host$request_uri;
+
+   }
+
+   listen 80;
+   listen [::]:80;
+   server_name eth-main.mydomain.dev;
+   access_log /var/log/nginx/reverse-access.log main;
+
+   return 404;
+}
+
+
+8c.2 Create a symbolic link to the sites-enabled folder under /etc/nginx
+
+ln -s /etc/nginx/sites-available/eth-main.mydomain.dev.conf /etc/nginx/sites-enabled/eth-main.mydomain.dev.conf
+
+systemctl stop nginx
+systemctl start nginx
+
+# check status
+systemctl status nginx
+
+9. Check that geth has synced 
+
+Do this as the user or root - doesn't matter
+
+>geth attach --datadir /your/path/chain/data
+
+To see if its synced
+>eth.syncing
+
+returns false then its synced
+
+> admin.nodeInfo - more detailed command
+
+# The following script will show the progress - copy and paste to the monitor command line
+# Wait and the percent progress will show. The first one ignore
+
+var lastPercentage = 0;var lastBlocksToGo = 0;var timeInterval = 10000;
+setInterval(function(){
+    var percentage = eth.syncing.currentBlock/eth.syncing.highestBlock*100;
+    var percentagePerTime = percentage - lastPercentage;
+    var blocksToGo = eth.syncing.highestBlock - eth.syncing.currentBlock;
+    var bps = (lastBlocksToGo - blocksToGo) / (timeInterval / 1000)
+    var etas = 100 / percentagePerTime * (timeInterval / 1000)
+
+    var etaM = parseInt(etas/60,10);
+    console.log(parseInt(percentage,10)+'% ETA: '+etaM+' minutes @ '+bps+'bps');
+
+    lastPercentage = percentage;lastBlocksToGo = blocksToGo;
+},timeInterval);
+
+Note Ctrl D to exit the geth monitor
+
+10. The last step is to reconfigure geth to restrict access to the IP addresses accessing it and setup the http.API for pocket eth and net .
+
+10.1 - systemctl stop geth - this could possibly take a minute even 2 so just wait 
+       
+       Edit the geth.service under /etc/systemd/system
+
+       Replace the ExecStart line with the following update
+
+geth --datadir /yourpath/eth/chain/data --port 30303 --syncmode "snap" --cache=8192 --http --http.port 8545 -http.api eth,net --http.vhosts localhost,node1.mypocketdomain.com --verbosity 5
+
+-http.api - is tje json public interface to geth blockchain.   eth and net used by pocket
+
+-http.vhosts - the hosts accessing the chain.  Of course localhost which will be used if their is a local pocket installation and the others from other servers.
+
+After you save geth.service 
+
+run
+
+systemctl daemon-reload
+systemctl start geth
+# make sure everything is ok
+systemctl status geth 
+
+
+11. Testing pocket geth relay on a Pocket Server
+
+11a. - update chains.json file on your VPS running pocket
+
+{
+    "id": "0021",
+    "url": "https://eth-main.mydomain.dev"
+}
+
+Run
+pocket start --simulateRelay in one terminal window
+
+Run
+curl -X POST --data '{"relay_network_id":"0021","payload":{"data":"{\"jsonrpc\":\"2.0\",\"method\":\"eth_syncing\",\"params\":[],\"id\":0}","method":"POST","path":"","headers":{}}}' https://node.mydomain.dev:8081/v1/client/sim
+
+you will get {"jsonrpc": "2.0", "id": 1, "result": "0x0"}  if it is successful.
+
+You can also check the logs on the geth server under /var/log/nginx  at the same time to make sure you see a 200 return
+
+
+
+12. Monitor System Performance
+12.1 - Look at /var/log/ubuntu/reverse-access.log  for time of relays
+
+12.2 run the command sar (need to install apt install sysstat) - I've installed but haven't used it yet
+
+
+
+
+
+
+
+
+
+
