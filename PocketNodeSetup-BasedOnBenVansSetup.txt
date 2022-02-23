@@ -1,4 +1,4 @@
-Setting up Pocket Node with  Ben Van's Help
+Setting up Pocket Node with  Ben Van's GitHub
 
 Context
 --------
