@@ -1,6 +1,6 @@
 # pocketnotes
 
-Two files are 
+Three files are 
 
 1. settinguppocketnodebasedonBenVansSetup.txt
    ------------------------------------------
@@ -14,6 +14,13 @@ Two files are
     - Includes how to run Lets Encrypt's certbot to automate the renewal of the pocket domain
     - Lots of comments
 
+3. EthereumBinarySetupNode.txt
+   ---------------------------
+   This is a very quick and rough setup of a binary eth main node on a mounted disk on a VPS on Hetzner or DO
+   However whats good it installs the latest version of geth 1.10.15 and uses the syncmode snap (formerly fast)
+   Works really well.   Still playing with some of the parameters as of today its seems to work well with my pocket
+   nodes.   
+   
 Feedback Welcome!
 
 DISCLAIMER
