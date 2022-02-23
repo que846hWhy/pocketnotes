@@ -1,0 +1,534 @@
+Setting up Pocket Node with  Ben Van's Help
+
+Context
+--------
+The steps below are how I've created a few Pocket Nodes till now (Feb 22/22) on Hetzner, AWS and Digital Ocean
+as VPS's.  
+
+I followed Ben Van's Step 1 and Step 2 with changes to two scripts and other modifications
+that suit what I find a good way of setting up the nodes.
+
+Ben Van's GitHup is located at:
+
+https://github.com/BenVanGithub/pokt-validator-configurator
+
+Changes I make to the his scripts are:
+a. use the latest version of Go, and 
+b. to use the Lets Encrypt automatic method of renewing the SSL certificate.
+
+
+DISCLAIMER
+----------
+YOU UNDERSTAND AND EXPRESSLY AGREE THAT THE USE OF THIS MATERIAL IS AT YOUR SOLE RISK.  
+If there are any mistakes in our material outlined here then we do not take any responsiblity 
+of things that go or could go wrong in your setup.
+If you make mistakes from the material here we do not take any responsiblity of things that go 
+or could go wrong in your setup.
+
+I hope this help's others.  
+
+Feedback:
+Any corrections or improvements to this document are are welcome!
+Good Luck!
+
+
+1. Setup SSH key to login to Server 
+	Obtain 3 usb keys.
+	Create ssh key both public and private key to reside on usb key NOT YOUR computer
+
+Instructions for Linux - See Notes Below (coming soon)
+
+Instructions for Windows with Putty - See Notes Below (comming soon)
+
+2. Login as Root (If Hetzner or DO) or ubuntu (if AWS or OVH) to start setting things up.
+
+3. Create a new user under which the Pocket Node will run under
+   (DO NOT RUN AS ROOT)
+
+	Following Ben Van's Step githup use the following script. 
+	Note I do each step manually.  Note on OVH and AWS ubuntu is already setup
+	wiht ssh access to the last 2 steps is up to you.
+
+	# creates a new user
+	adduser <user>
+	usermod -aG sudo <user>
+	cp -r /root/.ssh /home/<user>/.ssh
+	chown -R ${USER}:${USER} /home/<user>/.ssh
+
+   Test the login as this new user to make sure that you have copied the ssh public key 
+	used by root so that it can now be used by the new  <user>.  
+
+	
+	Open a new Terminal Window (Linux) or Putty session to see if you can login to the
+	server as the new user.
+
+
+4. Optional Step - Depending on your initial setup its a good idea to remove password access
+						 since you have setup ssh access for both the new user and root. 
+
+						 If its currently turned on then run the following from a new terminal
+						 ssh <IP> -l <user>
+
+						 Do this both for root and the <user> you created.  It will ask you for password access
+						 
+						 Now lets turn this off
+
+						 It reduces the attack surface of your server since password is denied and reduces throughput on the server
+						 caused by kiddie scripts trying to hack the server either as root or Bob Alice or Eve.
+
+						 cd /etc/ssh
+						 vi sshd_config
+
+						 Set
+						 PermitRootLogin yes  to PermitRootLogin no
+
+						 PasswordAuthentication yes to PasswordAuthentication no
+
+						 Save 
+
+						 then restart ssh services as follows:
+
+						 systemctl restart sshd 
+
+						 Try again ssh <IP> -l <user> either as root or the newly created user and you will see Permission denied
+
+	I highly recommend that  you setup backups or take regular snapshots so if the public key gets corrupted ( since you won't be able to log in)
+	you can restore before any data corruption.  (step reocmmended for the higly paranoid like myself)						 
+
+
+5. Download the githup of Ben Van Step 1 then Modify the dependencyinstaller.sh
+
+	Login as the new user from root or a new terminal
+
+	su <user>
+	# go to home directory of new user
+	cd \
+
+	Download the following GitHub from BenVan
+
+	sudo git clone https://github.com/BenVanGithub/pokt-validator-configurator.git
+
+	cd pokt-validator-configurator
+
+	copy dependencyinstaller.sh dependencyinstaller.sh.old
+
+	vi dependencyinstaller.sh 
+	
+	copy the following 
+
+#!/bin/bash
+sudo apt-get update -y
+sudo apt-get install golang -y
+sudo apt install nginx -y
+sudo apt install certbot python3-certbot-nginx -y
+sudo apt install git -y
+curl -sSL https://git.io/g-install | sh -s
+echo STARTING NEW SHELL TO LOAD G-INSTALL...
+sudo su - $(whoami)
+~                     
+
+This installs python3-certbot-nginx which will allow you to update the SSL certificate for
+your pocket domain automatically and removes ppa dependency file ppa:certbot/certbot not needed for ubuntu 20.04 and up.
+It also causes issues running apt update (needed all the time to keep the server up to date)
+
+
+6. Run the new dependencyinstaller.sh 
+
+./dependencyinstaller.sh
+
+it will load you into a new shell to allow access to Go but before running his  install.sh script 
+first to setup the Pocket domain and create an SSL certificate for the domain.
+
+5. Setup the domain for the Pocket Node
+
+	Create an A Record for the  subdomain of your pocket node assuming you want to use the domain for more than one node
+	at your DNS server.  The easiest is to use the registrar where you bought the domain.
+
+	I like to use Cloudflare (the free version) - they are fast and if you do get a DDOS attack they block the attack
+	which is included in the free version. 
+
+	Once you have created an A Record something like this node1.mydomain.com then go to MXtoolbox to see if its propagated
+
+	(On cloudlfare it takes a minute)
+
+	https://mxtoolbox.com/DnsLookup.aspx
+
+
+6. Setup the SSL Certificate - This is not the same as BenVan's which requires manual renewal
+
+sudo certbot certonly -d <yoursubdomain> --preferred-challenges http
+
+Enter email address (used for urgent renewal and security notices) (Enter 'c' to
+cancel): 
+
+Please read the Terms of Service at
+https://letsencrypt.org/documents/LE-SA-v1.2-November-15-2017.pdf. You must
+agree in order to register with the ACME server at
+https://acme-v02.api.letsencrypt.org/directory
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+(A)gree/(C)ancel: a
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Would you be willing to share your email address with the Electronic Frontier
+Foundation, a founding partner of the Let's Encrypt project and the non-profit
+organization that develops Certbot? We'd like to send you email about our work
+encrypting the web, EFF news, campaigns, and ways to support digital freedom.
+
+Obtaining a new certificate
+Performing the following challenges:
+http-01 challenge for nd01b.oldfaithful.dev
+Input the webroot for nd01b.oldfaithful.dev: (Enter 'c' to cancel): /var/www/html
+
+You no longer need a TXT record in your DNS as shown from BenVans's instructions.
+Instead, if I understand correctly, it puts a file in your home directory checks that https
+is working then deletes temporary file.
+
+Test out the renewal of the certbot
+
+# check to see the certbot renewal crontab is working
+sudo systemctl status certbot.timer
+
+# check to see if it will renew the domain SSL as a Dry Run
+sudo certbot certonly --dry-run -d <yourdomain.com>
+
+Note nginx virtual host  will be setup by Ben Van's install script and then after you can
+test out the domain https://subdomain.yourdomain.com
+
+
+7.  Modify Ben Van's install script to include the latest version of Go Or Use Attached Script
+	 which prompts you for Go Version
+
+Note the changes made are relative to the Home Directory where one will run the script.
+
+cd pokt-validator-configurator
+
+cp install.sh install.sh.old
+
+vi install.sh
+Shift Colon then enter: set number
+
+# First Change
+# Go to line 35 Change 1.13 to 1.17
+install 1.17
+
+# Second Change
+# replace Line 36: "go get -u github.com/pokt-network/pocket-core" with the next 4 lines 
+cd go
+mkdir -p src/github.com/pokt-network
+cd src/github.com/pokt-network
+git clone https://github.com/pokt-network/pocket-core.git
+
+# Change 3 on Line 116 and 117 as replacing 1.16 with 1.17
+echo "Updating Go to V 1.17"
+g install 1.17
+
+8. copy install.sh to the home directory of you user 
+
+./install.sh
+
+It will ask you for the subdomain.  Be carefull - No typos
+Say Yes to all the questions
+Have your password ready for your <user>
+
+Pocket is now installed.  
+
+9.  Create an account then run pocket to initialize the syncing of the blockchain
+
+	pocket accounts create
+
+	Let it run a bit for a few minutes then CTRL C
+
+	This will create the folder data under .pocket 
+
+	Now to bootstrap the blockchain
+
+9. BootStrapping
+
+A. Start a Screen Session
+
+screen (then press space bar)
+
+Go here to get the latest BootStrap
+
+https://github.com/pokt-network/pocket-snapshots
+
+Copy latest snapshot.
+
+Many methods - this uses the first tar directly into the ../data folder
+
+cd .pocket/data 
+
+1.c Just one  node then cd .pocket/data 
+wget -qO- https://link.us1.storjshare.io/raw/juqzyexh64g4iq7q36g24xyvbvfa/pocket-public-blockchains/pocket-network-data-0009-rc-0.6.3.6.tar | tar xvf -
+
+
+To save time use Screen
+Ctrl A Crtl D to leaver 
+then 
+screen -ls to see the screen number
+
+to return 
+
+screen -r <screen number>
+
+This will take a few hours or more so you can log off and check later by returning
+to the screen or simply type top to see if wget is the process at the top
+
+9. Setup as a Service - so that on reboot Pocket is restarted.
+
+Login as root
+
+cd /etc/systemd/system
+vi pocketnode.service
+
+Add the following lines
+
+[Unit]
+Description=pocket service node
+After=network-online.target
+[Service]
+Type=simple
+User=<user>
+ExecStart=/home/<user>/go/bin/pocket start
+Restart=always
+RestartSec=30s
+[Install]
+WantedBy=multi-user.target
+
+Run these two commands
+systemctl daemon-reload
+systemctl enable poktnode.service
+systemctl start poktnode.service
+
+Other commands you will need
+sudo systemctl stop poktnode.service
+systemctl status poktnode.service
+
+(this will show any errors in the service)
+
+To test the service is working correctly
+Reboot the server.
+After you login run top and check if pocket is running.
+If not you may have to check the logs to look for errors
+
+
+10. Setup firewall
+
+You can setup the firewall on teh server and/or on a hardware/software firewall in front of the server.
+If I'm setting up on DO or Hetzner then simply create the software firewall and allow the ports listed below.
+Note if you log in as root then you don't need sudo
+
+sudo apt-get install ufw  
+sudo ufw default deny incoming  
+sudo ufw default allow outgoing  
+sudo ufw allow ssh   
+sudo ufw allow 443
+sudo ufw allow 80  
+sudo ufw allow 8081
+sudo ufw allow 26656 
+
+# run this by itself
+sudo ufw enable  
+# check status
+sudo ufw status verbose  
+
+
+11.  To setup as Validator you need to make sure your node is synced.
+
+	   Run pocket query height and compare with the latest block height at https://explorer.pokt.network/
+
+	  Once its caught up then create the Validator
+
+	  See Ben Van's 2nd Step to create the validator 
+     https://github.com/BenVanGithub/pokt-validator-configurator/blob/master/README_2.md
+
+	  Basically I've copied and pasted the steps outlined at Ben Van's Steps GitHup
+	  I include my comments delimited wiht [] and marked with qy,  and a few minor changes
+
+******  Beginning of Ben Van's Document README_2.md on on GitHup ******
+
+	Step 6 Create Validator
+
+	(You are logged in as <user>)
+
+	6.1) pocket accounts list  
+
+	- you should see only one account, the one that you created in step 5.1
+
+	6.2) pocket accounts set-validator <address from 6.1 above>
+
+	+ Passphrase (you used when creating an account before the bootstrap process)
+
+	Step 7 Create chains.json (describes what blockchains you will serve and how)
+
+	7.1  vi .pocket/config/chains.json
+	
+	   [Setting up the chains file which contains the URLs of your chains that you will 
+		 run relays.   If you don't have any then just start with pocket and add when you
+		 manage to build some either with node pilot or from binary. (qy)
+
+			Assuming pocket is running 
+
+			sudo systemctl stop pocketnode 
+
+			cd .pocket/config
+			vi chains.json ] qy
+
+			From Ben Van's doc:
+
+			- insert the text below:  
+			
+			- Change xxx.xxx.xxx.xxx for the IPs of the full nodes which will provide relays 
+
+			[  
+				{
+					"id": "0001",  
+					"url": "http://xxx.xxx.xxx.xxx:8081"  
+				},  
+				{  
+					"id": "0021",  
+					"url": "http://xxx.xxx.xxx.xxx:8545"  
+				}  
+			]  
+
+	[This is just a json string.]qy
+
+	Step 8.0   Test out relay of chains 
+
+	[You will need two terminal sessions. One to run pocket  in relay mode and one to 
+	test out the relay.
+
+	From the first terminal session run this command]qy
+
+	8.1) pocket start --simulateRelay 
+
+	[From the second terminal session run the curl commands to test the relays 
+
+	Make sure if the blockchain url is accepting RPC requests from your IP address if its securely configured by the Pocket IP address. ] qy
+
+	8.2) Ethereum Relay Test:
+
+	-  (replace "yourDomain.com" with the URL of your Pocket Validator Node)  
+	-  (replace "xxx.xxx.xxx.xxx:port" with the IP of an Ethereum Full Node that will accept RPCs)  [[8545 = geth default port]]
+
+	curl -X POST --data '{"relay_network_id":"0021","payload":{"data":"{\"jsonrpc\":\"2.0\",\"method\":\"eth_getBalance\",\"params\":[\"0xe7a24E61b2ec77d3663ec785d1110688d2A32ecc\", \"latest\"],\"id\":1}","method":"POST","path":"","headers":{}}}' https://yourPocketDomain.com:port/v1/client/sim
+
+	+ produces  {"jsonrpc": "2.0", "id": 1, "result": "0x0"}   if successful
+
+	[I found the relays to the different chains always work if configured correctly.
+	The test on pocket I found usually doesn't work.]qy
+
+	8.3) Pocket Relay Test
+
+	-  (replace "yourDomain.com:port" with the URL of your Pocket Validator Node [[port 8081 or 443]])  
+	-  (replae "xxx.xxx.xxx.xxx:port" with the IP of a Pocket Full Node that will accept RPCs) [[ 8081=self? 8082 other? ]]
+
+	curl --insecure -X POST --data '{"relay_network_id":"0001","payload":{"data":"{}","method":"POST","path":"v1/query/nodes","headers":{}}}' https://yourPocketDomain.com:port/v1/client/sim
+
+	+ produces a massive wall of text if successful
+
+	8.4) Stop the node control-C
+
+	Step 9 - Load Wallet and Import Key
+
+	9.1) vi pocket/config/keyfile.json  
+			[OR cd .pocket/config   vi keyfile.json ]qy
+
+   9.1.1) Open the secure keyfile on your PC (desktop) with any text editor and copy the entire contents of that file.
+   9.1.2) Paste those contents into the keyfile.json which you are currently editing on the server.
+   9.1.3) save the file.
+
+	@@ NOTE: we are using the path .pocket/config for convenience and consistency…  @@
+	@@ it does not have to be in that specific directory nor have that specific name. @@
+
+9.2) pocket accounts import-armored .pocket/config/keyfile.json 
+		(this is if you are the <user> home directory - qw)
+
+		+passphrase
+		!<<EnterYourPassphrase>>
+		+passphrase
+		!<<EnterYourPassphrase>> again
+		+ Account imported successfully [LongStringOfLettersAndNumbers] 
+		- This is your Validator-Address to be used below and for future refrence
+
+Step 10 Set the Validator address and Restart the node
+
+10.1) pocket accounts set-validator < Validator-Address >
+
+		+passphrase
+		!<<EnterYourPassphrase>>
+
+10.2) pocket start  [as a service: sudo systemctl start <servicenameforpocket>]
+
+Step 11 Stake the node
+
+- if you are using funds from the genesis block, you are already staked.
+- Skip to step 12
+
+11.1) Building the stake command .... 
+
+@@  Step 11 is still under construction                                  @@
+- pocket nodes stake <fromAddr> <amount in uPOKT> <chains> <serviceURI w/ rpc port> <chainID> <fees in Upokt>
+- sample:
+! pocket nodes stake <Validator/Staking Address> 15 140 000 000            0001,0021 https://yourDomainName:443 testnet 10000
++ passphrase
+
+******  End of Ben Van's Document on on GitHup ******
+
+Here are my comments and warnings about staking:
+
+Warning 0:  Make sure your node is synced. ie pocket query height and compare at https://explorer.pokt.network/
+
+Warning 1:  Make sure you put the right amount.  Don't miss the zero at the end.  Once  you stake on mainnet - to unstake
+            takes 21 days.  Lets say you want to stake 16 K of pocket. That would be 16000 x 10**6 or 16000 000 000 = 16000000000
+				9 zeros and 2 digits at the beginning.
+
+Warning 2:  Double/Triple check the address of the account. Less to worry because you need the right password.
+
+Warning 3: Make sure the chain ids match those in .pocket/config/chains.json
+
+Warning 4: Make sure the url of your pocket domain is correct.
+
+Example on mainnet with 16 K.
+
+pocket nodes stake <address> 16000000000 0001,0021 https://yourPocketDomainName:443 mainnet 10000
+
+
+12. Cleanup files
+	 
+	 Be sure to remove the keyfile.json (though the private is encrypted )
+	 It should be 2 steps
+ 
+
+	 Step 1: shred keyfile.json - This fills the file with random characters.
+	 Step 2: rm keyfile.json    - Deletes the file (which is just removing the pointer to the file - reason for Step 1)
+
+13. Unjailing - See Ben Van's Step 12.	 
+
+
+Good Luck!!!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+
+
+
+
+
+						 
