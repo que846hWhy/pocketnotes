@@ -8,7 +8,7 @@ as VPS's.
 I followed Ben Van's Step 1 and Step 2 with changes to two scripts and other modifications
 that suit what I find a good way of setting up the nodes.
 
-Ben Van's GitHup is located at:
+Ben Van's GitHub is located at:
 
 https://github.com/BenVanGithub/pokt-validator-configurator
 
