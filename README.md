@@ -8,7 +8,7 @@ Two files are
 
 2. PocketNodeSetup-BasedOnBenVansSetup.txt
    ---------------------------------------
-   Detailed Outline of Setting up a Pocket Node on a VPS like Hetzner, DO or AWS.
+   Detailed Outline of Setting up a Pocket Node on a VPS like Hetzner, DO or AWS based on BenVan's Setup on GitHup
     - Includes how to make changes to Ben Van's 2 main scripts: install.sh and dependencyinstaller.sh 
     - Includes how to setup Pocket as a Service
     - Includes how to run Lets Encrypt's certbot to automate the renewal of the pocket domain
