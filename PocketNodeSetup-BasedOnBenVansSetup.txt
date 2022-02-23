@@ -96,7 +96,7 @@ Instructions for Windows with Putty - See Notes Below (comming soon)
 	you can restore before any data corruption.  (step reocmmended for the higly paranoid like myself)						 
 
 
-5. Download the githup of Ben Van Step 1 then Modify the dependencyinstaller.sh
+5. Download the github of Ben Van Step 1 then Modify the dependencyinstaller.sh
 
 	Login as the new user from root or a new terminal
 
